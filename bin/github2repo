@@ -1,0 +1,89 @@
+#!/usr/bin/env php
+<?php
+
+use Symfony\Component\Console\Output\OutputInterface;
+
+require __DIR__.'/../vendor/autoload.php';
+
+$app = new Silly\Application();
+
+$app->command(
+    'gen [--endpoint=] [--access-token=] [--org=]* [--usr=]*',
+    function(
+        OutputInterface $output,
+        string $endpoint = null,
+        string $accessToken = null,
+        array $org = [],
+        array $usr = []
+    ) {
+        $github = new Github\Client(
+            enterpriseUrl: $endpoint,
+        );
+
+        if (null !== $accessToken) {
+            $github->authenticate($accessToken, null, Github\Client::AUTH_ACCESS_TOKEN);
+        }
+
+        $document = new DOMDocument();
+        $document->formatOutput = true;
+        $document->append(
+            $root = $document->createElement('manifest'),
+        );
+
+        foreach ($org as $orgName) {
+            $organisation = $github->organization()->show($orgName);
+
+            try {
+                $root->append($document->createComment(" org: $orgName "));
+            } catch (\Throwable $e) {
+                $output->writeln("<error>Error retrieving org = $orgName: {$e->getMessage()}</error>");
+            }
+
+            $remote = $document->createElement('remote');
+            $remote->setAttribute('name', $orgName);
+            $remote->setAttribute('fetch', str_replace('https://github.com/', 'git@github.com:', $organisation['html_url']));
+            $root->append($remote);
+
+            $paginator  = new Github\ResultPager($github);
+            $result = $paginator->fetchAll($github->organization(), 'repositories', [$orgName]);
+            foreach ($result as $project) {
+                $el = $document->createElement('project');
+                $el->setAttribute('name', "{$project['name']}.git");
+                $el->setAttribute('remote', "github-$orgName");
+                $el->setAttribute('revision', $project['default_branch']);
+                $el->setAttribute('path', $project['name']);
+                $root->append($el);
+            }
+        }
+
+        foreach ($usr as $username) {
+            $root->append($document->createComment(" usr: $username "));
+
+            try {
+                $user = $github->user()->show($username);
+            } catch (\Throwable $e) {
+                $output->writeln("<error>Error retrieving usr = $username: {$e->getMessage()}</error>");
+            }
+
+            $remote = $document->createElement('remote');
+            $remote->setAttribute('name', $username);
+            $remote->setAttribute('fetch', str_replace('https://github.com/', 'git@github.com:', $user['html_url']));
+            $root->append($remote);
+
+            $paginator  = new Github\ResultPager($github);
+            $result = $paginator->fetchAll($github->user(), 'repositories', [$username]);
+            foreach ($result as $project) {
+                $el = $document->createElement('project');
+                $el->setAttribute('name', "{$project['name']}.git");
+                $el->setAttribute('remote', "github-$username");
+                $el->setAttribute('revision', $project['default_branch']);
+                $el->setAttribute('path', $project['name']);
+                $root->append($el);
+            }
+        }
+
+        echo $document->saveXML(), PHP_EOL;
+    }
+);
+
+$app->run();
