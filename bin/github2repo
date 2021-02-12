@@ -31,21 +31,27 @@ $app->command(
         );
 
         foreach ($org as $orgName) {
-            $organisation = $github->organization()->show($orgName);
-
             try {
-                $root->append($document->createComment(" org: $orgName "));
+                $organisation = $github->organization()->show($orgName);
+
+                $paginator  = new Github\ResultPager($github);
+                $result = $paginator->fetchAll($github->organization(), 'repositories', [$orgName]);
+                uasort($result, static function(array $project1, array $project2): int {
+                    return strtolower($project1['name']) <=> strtolower($project2['name']);
+                });
             } catch (\Throwable $e) {
                 $output->writeln("<error>Error retrieving org = $orgName: {$e->getMessage()}</error>");
+
+                continue;
             }
 
+            $root->append($document->createComment(" org: $orgName "));
+
             $remote = $document->createElement('remote');
-            $remote->setAttribute('name', $orgName);
-            $remote->setAttribute('fetch', str_replace('https://github.com/', 'git@github.com:', $organisation['html_url']));
+            $remote->setAttribute('name', "github-$orgName");
+            $remote->setAttribute('fetch', str_replace("/{$result[0]['name']}.git", '', $result[0]['ssh_url']));
             $root->append($remote);
 
-            $paginator  = new Github\ResultPager($github);
-            $result = $paginator->fetchAll($github->organization(), 'repositories', [$orgName]);
             foreach ($result as $project) {
                 $el = $document->createElement('project');
                 $el->setAttribute('name', "{$project['name']}.git");
@@ -57,21 +63,27 @@ $app->command(
         }
 
         foreach ($usr as $username) {
-            $root->append($document->createComment(" usr: $username "));
-
             try {
                 $user = $github->user()->show($username);
+
+                $paginator  = new Github\ResultPager($github);
+                $result = $paginator->fetchAll($github->user(), 'repositories', [$username]);
+                uasort($result, static function(array $project1, array $project2): int {
+                    return strtolower($project1['name']) <=> strtolower($project2['name']);
+                });
             } catch (\Throwable $e) {
                 $output->writeln("<error>Error retrieving usr = $username: {$e->getMessage()}</error>");
+
+                continue;
             }
 
+            $root->append($document->createComment(" usr: $username "));
+
             $remote = $document->createElement('remote');
-            $remote->setAttribute('name', $username);
-            $remote->setAttribute('fetch', str_replace('https://github.com/', 'git@github.com:', $user['html_url']));
+            $remote->setAttribute('name', "github-$username");
+            $remote->setAttribute('fetch', str_replace("/{$result[0]['name']}.git", '', $result[0]['ssh_url']));
             $root->append($remote);
 
-            $paginator  = new Github\ResultPager($github);
-            $result = $paginator->fetchAll($github->user(), 'repositories', [$username]);
             foreach ($result as $project) {
                 $el = $document->createElement('project');
                 $el->setAttribute('name', "{$project['name']}.git");
