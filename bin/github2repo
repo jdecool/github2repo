@@ -8,9 +8,10 @@ require __DIR__.'/../vendor/autoload.php';
 $app = new Silly\Application();
 
 $app->command(
-    'gen [--endpoint=] [--access-token=] [--org=]* [--usr=]*',
+    'gen [--endpoint=] [--access-token=] [--discover-orgs] [--org=]* [--usr=]*',
     function(
         OutputInterface $output,
+        bool $discoverOrgs,
         string $endpoint = null,
         string $accessToken = null,
         array $org = [],
@@ -30,11 +31,20 @@ $app->command(
             $root = $document->createElement('manifest'),
         );
 
+        if ($discoverOrgs) {
+            $paginator = new Github\ResultPager($github);
+            $result = $paginator->fetchAll($github->organization(), 'all');
+            $org = array_merge(
+                array_map(static fn(array $data): string => $data['login'], $result),
+                $org,
+            );
+        }
+
         foreach ($org as $orgName) {
             try {
                 $organisation = $github->organization()->show($orgName);
 
-                $paginator  = new Github\ResultPager($github);
+                $paginator = new Github\ResultPager($github);
                 $result = $paginator->fetchAll($github->organization(), 'repositories', [$orgName]);
                 uasort($result, static function(array $project1, array $project2): int {
                     return strtolower($project1['name']) <=> strtolower($project2['name']);
@@ -66,7 +76,7 @@ $app->command(
             try {
                 $user = $github->user()->show($username);
 
-                $paginator  = new Github\ResultPager($github);
+                $paginator = new Github\ResultPager($github);
                 $result = $paginator->fetchAll($github->user(), 'repositories', [$username]);
                 uasort($result, static function(array $project1, array $project2): int {
                     return strtolower($project1['name']) <=> strtolower($project2['name']);
