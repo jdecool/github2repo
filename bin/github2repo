@@ -55,6 +55,10 @@ $app->command(
                 continue;
             }
 
+            if (empty($result)) {
+                continue;
+            }
+
             $root->append($document->createComment(" org: $orgName "));
 
             $remote = $document->createElement('remote');
@@ -84,6 +88,10 @@ $app->command(
             } catch (\Throwable $e) {
                 $output->writeln("<error>Error retrieving usr = $username: {$e->getMessage()}</error>");
 
+                continue;
+            }
+
+            if (empty($result)) {
                 continue;
             }
 
